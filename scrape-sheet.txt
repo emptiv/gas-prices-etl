@@ -1,0 +1,41 @@
+<body>
+  <script>...
+  <div id ="__nuxt">
+    <div id ="__layout">
+      <div class="...>
+        <div aria-hidden...>
+        <header class="main-header...>
+        <main id="main-content" ...>
+          <article class="container mx-auto...>
+            <div class="relative...">
+              <div class="mt-16 col-span-12" data-v-1e62fb39>
+                <!---->
+                <div data-v-1e62fb39>
+                  <!---->
+                  <div class="p-8 bg-white text-black shadow-xl rounded-sm" data-v-1e62fb39>
+                    <div class="...">
+                      <div class="flex w-full...>
+                      <div id="printable-content" data-v-1e62fb39>
+                        <div class="flex flex-col...>
+                        <div class="article-content"...>
+                          <style...>
+                          <h1>
+                          <div class="ex1">
+                            <table class="MsoTableGrid"...>
+                              <tbody>
+                                <tr>
+                                  <td style=...>
+                                    <h2>2026</h2> # get year here
+                                  </td>
+                                  <td style=...>
+                                    <ul>
+                                      <li>
+                                        ::marker
+                                        August
+                                        <ul>
+                                          <li>
+                                            ::marker
+                                            <a href="pdf_link">July 28 to August 3</a>
+                                          </li>
+                                          <li>... # and so on
+                          
