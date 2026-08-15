@@ -2,6 +2,7 @@ import os
 import re
 from urllib.parse import urljoin
 from pathlib import Path
+from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
@@ -9,6 +10,7 @@ from playwright.sync_api import sync_playwright
 # target URL
 URL = "https://doe.gov.ph/articles/3142895--list-of-ncr-pump-prices"
 BASE_DIR = Path("downloads")
+CUTOFF_DATE = datetime(2023, 7, 21)
 
 # headers to mimic a real browser request
 HEADERS = {
@@ -21,6 +23,28 @@ HEADERS = {
 
 def clean_filename(name: str) -> str:
   return re.sub(r'[\\/*?:"<>|]', "", name).strip()
+
+def parse_link_approx_date(year_str: str, link_text: str) -> datetime:
+  try:
+    year = int(year_str)
+  except ValueError:
+    return datetime.min
+
+  month_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*', link_text, re.I)
+  day_match = re.search(r'\b(\d{1,2})\b', link_text)
+
+  if month_match and day_match:
+    month_str = month_match.group(1)
+    day = int(day_match.group(1))
+
+    for fmt in ("%b", "%B"):
+      try:
+        dt = datetime.strptime(f"{month_str} {day} {year}", f"{fmt} %d %Y")
+        return dt
+      except ValueError:
+        pass
+
+  return datetime(year, 12, 31)
 
 def fetch_rendered_html(url: str) -> str:
   print("launching browser to render JS...")
@@ -52,6 +76,8 @@ def scrape_and_download():
   session = requests.Session()
   session.headers.update(HEADERS)
 
+  downloaded_files: list[Path] = []
+
   # iterate over table rows (each row corresponds to a year)
   rows = table.find_all("tr")
 
@@ -68,7 +94,7 @@ def scrape_and_download():
     year_match = re.search(r'\b(20\d{2}\b)', year_text)
     year = year_match.group(1) if year_match else clean_filename(year_text)
 
-    if not year:
+    if not year.isdigit() or int(year) < CUTOFF_DATE.year:
       continue
 
     # 2. extract month & links from the second column
@@ -95,14 +121,21 @@ def scrape_and_download():
         raw_text = link.get_text(strip=True)
         link_text = clean_filename(raw_text)
 
+        approx_date = parse_link_approx_date(year, f"{month_name} {link_text}")
+        if approx_date < CUTOFF_DATE:
+          continue
+
         full_pdf_url = urljoin(URL, href)
 
         filename = f"{link_text}.pdf" if not link_text.lower().endswith(".pdf") else link_text
 
         target_dir = BASE_DIR / year / month_name
         target_dir.mkdir(parents=True, exist_ok=True)
-
         file_path = target_dir / filename
+
+        if file_path.exists() and file_path.stat().st_size > 0:
+          print(f"skipping (already exists): {filename}")
+          continue
 
         # download file
         print(f"downloading: [{year} / {month_name}] -> {filename}")
@@ -114,8 +147,10 @@ def scrape_and_download():
             for chunk in pdf_res.iter_content(chunk_size=8192):
               if chunk:
                 f.write(chunk)
+
+          downloaded_files.append(file_path)
+
         except Exception as e:
           print(f"failed to download {full_pdf_url}: {e}")
 
-if __name__ == "__main__":
-  scrape_and_download()
+  return downloaded_files

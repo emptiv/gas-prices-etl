@@ -1,8 +1,50 @@
-from parser import process_pdf_file
+import sys
+import traceback
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from scrape import scrape_and_download
+from parser import process_pdf_file, peek_date_range
+from db import insert_records, is_date_range_exists
+
+def process_and_upload_pdf(pdf_path: Path, report_id: int) -> int:
+  try:
+    start_date, end_date = peek_date_range(str(pdf_path))
+
+    if start_date and end_date and is_date_range_exists(start_date, end_date):
+      print(f"skipping {pdf_path.name}: date range [{start_date} to {end_date}] already exists in DB.")
+      return 0
+
+
+    result: Dict[str, Optional[Any]] = process_pdf_file(str(pdf_path), report_id=report_id)
+    records: List[Dict[str, Any]] = result.get("records") or []
+
+    if not records:
+      print(f"no records extracted from {pdf_path.name}")
+      return 0
+
+    inserted_count = insert_records(records)
+    print(f"[{result['start_date']} to {result['end_date']}] inserted/updated {inserted_count} records for {pdf_path.name}")
+    return inserted_count
+
+  except Exception as e:
+    print(f"error processing PDF {pdf_path.name}: {e}")
+    return 0
+
+def run_pipeline():
+  new_pdf_paths = scrape_and_download()
+
+  if not new_pdf_paths:
+    print("everything is up to date! no new PDFs to download")
+    return
+
+  print(f"processing newly downloaded pdf files...")
+
+  total_records = 0
+  for idx, pdf_path in enumerate(new_pdf_paths, start=1):
+    count = process_and_upload_pdf(pdf_path, report_id=idx)
+    total_records += count
+
+  print(f"processed {len(new_pdf_paths)} PDFs with {total_records} total database records.")
 
 if __name__ == "__main__":
-  pdf_path = "samples/NEWER_HYBRID.pdf"
-  records = process_pdf_file(pdf_path, report_id=1)
-
-  print(f"extracted {len(records)} clean records ready for database insertion ;)")
-  print(records)
+  run_pipeline()

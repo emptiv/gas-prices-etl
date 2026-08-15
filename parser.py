@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 from plumber import extract_tables_from_pdf
+import pdfplumber
 
 TARGET_PRODUCTS = [
   "DIESEL", "DIESEL PLUS", "KEROSENE",
@@ -41,7 +42,20 @@ def parse_date_range(text:str) -> Tuple[Optional[str], Optional[str]]:
 
   return None, None
 
+def peek_date_range(pdf_path: str) -> Tuple[Optional[str], Optional[str]]:
+  try:
+    with pdfplumber.open(pdf_path) as pdf:
+      for page in pdf.pages:
+        text = page.extract_text() or ""
+        if "PREVAILING" in text.upper():
+          s_dt, e_dt = parse_date_range(text)
+          if s_dt and e_dt:
+            return s_dt, e_dt
+  except Exception as e:
+    print(f"could not peek date range from {pdf_path}: {e}")
 
+  return None, None
+          
 def process_pdf_file(pdf_path: str, report_id: int) -> Dict[str, Optional[Any]]:
   raw_tables = extract_tables_from_pdf(pdf_path)
 
