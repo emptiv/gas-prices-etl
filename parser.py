@@ -9,36 +9,73 @@ TARGET_PRODUCTS = [
   "GASOLINE (RON97/100)", "GASOLINE (RON95)", "GASOLINE (RON91)"
 ]
 
+MONTH_MAP = {
+  "jan": 1, "january": 1,
+  "feb": 2, "february": 2,
+  "mar": 3, "march": 3,
+  "apr": 4, "april": 4,
+  "may": 5,
+  "jun": 6, "june": 6,
+  "jul": 7, "july": 7,
+  "aug": 8, "august": 8,
+  "sep": 9, "sept": 9, "september": 9,
+  "oct": 10, "october": 10,
+  "nov": 11, "november": 11,
+  "dec": 12, "december": 12,
+}
+
 def parse_date_range(text:str) -> Tuple[Optional[str], Optional[str]]:
   if not text:
     return None, None
 
-  match = re.search(r"\(\s*(?:as\s+of|for\s+the\s+week\s+of)\s+([^\)\n\r]+)\)?", text, re.IGNORECASE)
-  if not match:
+  clean_text = re.sub(r"\.\b", "", text.lower())
+  clean_text = re.sub(r"\s+", " ", clean_text)
+
+  match = re.search(r"\((?:as\s+of|for\s+(?:the\s+)?(?:week|period)\s+of)\s+([^\)\n\r]+)\)?", clean_text, re.IGNORECASE)
+  raw_range = match.group(1).strip() if match else clean_text
+
+  years = [int(y) for y in re.findall(r"\b(20\d{2})\b", raw_range)]
+  if not years:
     return None, None
 
-  raw_range = re.sub(r"\s+", " ", match.group(1)).strip()
+  two_month_match = re.search(
+    r"([a-z]+)\s*(\d{1,2})(?:\s*,\s*\d{4})?\s*[-–\b(?:to)]+\s*([a-z]+)\s*(\d{1,2})(?:\s*,\s*(\d{4}))?",
+    raw_range
+  )
+  if two_month_match:
+    m1_str, d1_str, m2_str, d2_str, y2_override = two_month_match.groups()
+    m1 = MONTH_MAP.get(m1_str)
+    m2 = MONTH_MAP.get(m2_str)
+    if m1 and m2:
+      y1 = years[0]
+      y2 = int(y2_override) if y2_override else (years[1] if len(years) > 1 else years[0])
 
-  cross_month_match = re.match(r"([A-Za-z]+)\s+(\d+)\s*[-to]+\s*([A-Za-z]+)\s+(\d+),?\s*(\d{4})", raw_range, re.IGNORECASE)
-  if cross_month_match:
-    m1, d1, m2, d2, year = cross_month_match.groups()
-    try:
-      dt1 = datetime.strptime(f"{m1} {d1} {year}", f"%B %d %Y")
-      dt2 = datetime.strptime(f"{m2} {d2} {year}", f"%B %d %Y")
-      return dt1.strftime("%Y-%m-%d"), dt2.strftime("%Y-%m-%d")
-    except ValueError:
-      pass
+      if m1 == 12 and m2 == 1 and len(years) == 1:
+        y2 = y1 + 1
 
-  same_month_match = re.match(r"([A-Za-z]+)\s+(\d+)\s*[-to]+\s*(\d+),?\s*(\d{4})", raw_range, re.IGNORECASE)
-  if same_month_match:
-    month, d1, d2, year = same_month_match.groups()
-    month_fmt = "%b" if len(month) == 3 else "%B"
-    try:
-      dt1 = datetime.strptime(f"{month} {d1} {year}", f"{month_fmt} %d %Y")
-      dt2 = datetime.strptime(f"{month} {d2} {year}", f"{month_fmt} %d %Y")
-      return dt1.strftime("%Y-%m-%d"), dt2.strftime("%Y-%m-%d")
-    except ValueError:
-      pass
+      try:
+        dt1 = datetime(y1, m1, int(d1_str))
+        dt2 = datetime(y2, m2, int(d2_str))
+        return dt1.strftime("%Y-%m-%d"), dt2.strftime("%Y-%m-%d")
+      except ValueError:
+        pass
+    
+
+  single_month_match = re.search(
+    r"([a-z]+)\s*(\d{1,2})\s*[-–\b(?:to)]+\s*(\d{1,2})",
+    raw_range
+  )
+  if single_month_match:
+    m_str, d1_str, d2_str = single_month_match.groups()
+    m = MONTH_MAP.get(m_str)
+    if m:
+      year = years[-1]
+      try:
+        dt1 = datetime(year, m, int(d1_str))
+        dt2 = datetime(year, m, int(d2_str))
+        return dt1.strftime("%Y-%m-%d"), dt2.strftime("%Y-%m-%d")
+      except ValueError:
+        pass
 
   return None, None
 

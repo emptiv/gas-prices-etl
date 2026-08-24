@@ -2,9 +2,17 @@ import sys
 import traceback
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from scrape import scrape_and_download
 from parser import process_pdf_file, peek_date_range
 from db import insert_records, is_date_range_exists
+
+BASE_DIR = Path("downloads")
+
+def get_local_pdf_paths(base_dir: Path) -> List[Path]:
+  if not base_dir.exists():
+    print(f"error: directory '{base_dir}' does not exist.")
+    return []
+
+  return sorted(list(base_dir.rglob("*.pdf")))
 
 def process_and_upload_pdf(pdf_path: Path, report_id: int) -> int:
   try:
@@ -31,20 +39,20 @@ def process_and_upload_pdf(pdf_path: Path, report_id: int) -> int:
     return 0
 
 def run_pipeline():
-  new_pdf_paths = scrape_and_download()
+  pdf_paths = get_local_pdf_paths(BASE_DIR)
 
-  if not new_pdf_paths:
+  if not pdf_paths:
     print("everything is up to date! no new PDFs to download")
     return
 
   print(f"processing newly downloaded pdf files...")
 
   total_records = 0
-  for idx, pdf_path in enumerate(new_pdf_paths, start=1):
+  for idx, pdf_path in enumerate(pdf_paths, start=1):
     count = process_and_upload_pdf(pdf_path, report_id=idx)
     total_records += count
 
-  print(f"processed {len(new_pdf_paths)} PDFs with {total_records} total database records.")
+  print(f"processed {len(pdf_paths)} PDFs with {total_records} total database records.")
 
 if __name__ == "__main__":
   run_pipeline()
