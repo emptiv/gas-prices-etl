@@ -79,8 +79,8 @@ def scrape_and_download():
   session = requests.Session()
   session.headers.update(HEADERS)
   downloaded_files: list[Path] = []
+  processed_urls = set()
 
-  # iterate over table rows (each row corresponds to a year)
   rows = table.find_all("tr")
 
   for row in rows:
@@ -118,6 +118,11 @@ def scrape_and_download():
         if not href:
           continue
 
+        full_pdf_url = urljoin(URL, href)
+        if full_pdf_url in processed_urls:
+          continue
+        processed_urls.add(full_pdf_url)
+
         raw_text = link.get_text(strip=True)
         link_text = clean_filename(raw_text)
 
@@ -125,7 +130,6 @@ def scrape_and_download():
         if approx_date < CUTOFF_DATE:
           continue
 
-        full_pdf_url = urljoin(URL, href)
         filename = f"{link_text}.pdf" if not link_text.lower().endswith(".pdf") else link_text
 
         target_dir = BASE_DIR / year / current_month
