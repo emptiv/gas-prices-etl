@@ -2,6 +2,7 @@ import sys
 import traceback
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from scrape import scrape_and_download
 from parser import process_pdf_file, peek_date_range
 from db import insert_records, is_date_range_exists
 
@@ -22,7 +23,6 @@ def process_and_upload_pdf(pdf_path: Path, report_id: int) -> int:
       print(f"skipping {pdf_path.name}: date range [{start_date} to {end_date}] already exists in DB.")
       return 0
 
-
     result: Dict[str, Optional[Any]] = process_pdf_file(str(pdf_path), report_id=report_id)
     records: List[Dict[str, Any]] = result.get("records") or []
 
@@ -39,6 +39,14 @@ def process_and_upload_pdf(pdf_path: Path, report_id: int) -> int:
     return 0
 
 def run_pipeline():
+  print("checking for new/missing PDFs from DOE website...")
+  newly_downloaded = scrape_and_download()
+
+  if newly_downloaded:
+    print(f"downloaded {len(newly_downloaded)} new PDF(s).")
+  else:
+    print("no new PDFs downloaded. checking local files...")
+
   pdf_paths = get_local_pdf_paths(BASE_DIR)
 
   if not pdf_paths:
