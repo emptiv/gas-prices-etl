@@ -1,26 +1,14 @@
 # gas-prices-etl
 
-an ETL (extract, transform, load) pipeline that parses PDF reports containing National Capital Region (NCR) gas price data and loads structured records into a PostgreSQL database.
+an ETL (extract, transform, load) pipeline that automatically scrapes, parses, and loads National Capital Region (NCR) gas price PDF reports from the Department of Energy (DOE) into a PostgreSQL database.
 
 ---
 
 ### important notes
-- the original Department of Energy (DOE) portal (`https://doe.gov.ph`) underwent a site overhaul, removing the historical web tables and public PDF links. the web scraper (`scrape.py`) is retained in the codebase solely as a technical reference for how Playwright and BeautifulSoup were used to extract filtered records (July 21, 2023 onwards).
-- active processing runs entirely offline against pre-downloaded files in the `downloads/` directory.
-- reports are pre-screened via `peek_date_range()` to skip files whose date ranges are already populated in the database.
-- extracted prices use PostgreSQL's `ON CONFLICT (start_date, end_date, product)` clause to seamlessly update existing entries without creating duplicates.
-
----
-
-### required packages
-- pdfplumber
-- pandas
-- psycopg2-binary
-- python-dotenv
-- requests *(optional reference for `scrape.py`)*
-- beautifulsoup4 *(optional reference for `scrape.py`)*
-- playwright *(optional reference for `scrape.py`)*
-   - chromium
+- the scraper (`scrape.py`) handles the updated DOE portal layout (`https://doe.gov.ph/data-and-prices/liquid-fuels/retail-pump-prices/ncr-pump-prices`). it uses Playwright and BeautifulSoup to render dynamic JavaScript tables, extract new PDF links, and download missing files automatically.
+- PDF files are fetched starting from the cutoff date (July 21, 2023 to present) and saved locally inside organized folder structures under `downloads/`.
+- reports are pre-screened using `peek_date_range()` to skip files whose date ranges are already stored in the database, preventing unnecessary heavy PDF parsing.
+- extracted pricing data uses PostgreSQL's `ON CONFLICT (start_date, end_date, product)` clause to seamlessly update existing database entries without creating duplicate rows.
 
 ---
 
@@ -28,7 +16,8 @@ an ETL (extract, transform, load) pipeline that parses PDF reports containing Na
 
 1. **clone the repository and install required dependencies**
    ```bash
-   pip install pdfplumber pandas psycopg2-binary python-dotenv
+   pip install -r requirements.txt
+   playwright install chromium
    ```
 
 2. **configure database credentials in .env file**
@@ -41,12 +30,12 @@ an ETL (extract, transform, load) pipeline that parses PDF reports containing Na
    ```
 
 3. **verify local data**
-   make sure that the extracted/archived PDF reports are inside the `downloads/` directory (nested folder structures like `downloads/YYYY/Month/` are scanned recursively).
+   ensure a `downloads/` directory exists (or let the script create it). downloaded files will automatically be sorted into nested structures like `downloads/YYYY/Month/`.
 
 ---
 
 ### how to use
-- just run the main entry script to parse all local files and sync to PostgreSQL
+- just run the main entry script to trigger the full scraper and database sync pipeline
    ```bash
    python main.py
    ```
@@ -54,8 +43,10 @@ an ETL (extract, transform, load) pipeline that parses PDF reports containing Na
 ---
 
 ### main pipeline workflow
-1. recursively locates all `.pdf` documents within `downloads/`.
-2. extracts report metadata (`start_date` and `end_date`) from each PDF header.
-3. queries the target database to check if the date range already exists.
-4. parses product categories (*DIESEL*, *GASOLINE RON91/95/97*, *KEROSENE*) along with min, max, and common prices.
-5. inserts new rows or updates records in the `ncr_gas_prices` table.
+1. launches the browser via Playwright to fetch and render the DOE's dynamic HTML tables.
+2. checks for missing or new PDF reports and downloads them into the `downloads/` directory.
+3. recursively scans `downloads/` to locate all available `.pdf` documents.
+4. extracts report metadata (`start_date` and `end_date`) from each PDF header using flexible regex patterns.
+5. queries PostgreSQL to verify if the date range already exists.
+6. parses product categories (*DIESEL*, *GASOLINE RON91/95/97*, *KEROSENE*) along with min, max, and common prices using `pdfplumber`.
+7. inserts new rows or updates existing records in the `ncr_gas_prices` database table.
