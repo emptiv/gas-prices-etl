@@ -1,4 +1,39 @@
 <body>
+  <main id="main-content" style=...>
+    <div class="route-transition">
+      <main class="wrap section-padding"...>
+        <div class ="section-layout-body">
+          <section class="cms-blocks"...>
+            <article class="prose">
+              <p>
+                <strong>NCR Pump Prices</strong>
+              </p>
+              <p>whitespace</p>
+              <h6></h6>
+              <table class="lex-table">
+                <tbody>
+                  <tr>
+                    <td>
+                      <p style="text-align:center">
+                        <strong>2026</strong>
+                      </p>
+                    </td>
+                    <td>
+                      <ul>
+                        <li>
+                          ::marker
+                          August
+                        </li>
+                        <li>
+                          ::marker
+                          <ul>
+                            <li>
+                              ::marker
+                              <a href="[pdf_link]">
+                              July 28 to August 3</a>
+                            </li>...and so on
+
+---
   <script>...
   <div id ="__nuxt">
     <div id ="__layout">
