@@ -8,9 +8,6 @@ an ETL (extract, transform, load) pipeline that automatically scrapes, parses, a
 
 this repository powers the automated data pipeline for the **[NCR Gas Price Analytics](https://gas-price-analytics.vercel.app/)** web application. 
 
-- scrapes dynamic DOE PDF reports, normalizes multi-year pricing structures, and loads records into PostgreSQL via Supabase.
-- consumes the ingested data to serve interactive price trends, regional averages, and historical comparisons.
-
 ---
 
 ### screenshots
