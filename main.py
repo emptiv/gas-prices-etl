@@ -1,66 +1,92 @@
-import sys
-import traceback
+from datetime import date
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from scrape import scrape_and_download
 from parser import process_pdf_file, peek_date_range
-from db import insert_records, is_date_range_exists
+from db import insert_records, get_latest_date_range, is_date_range_exists
 
-BASE_DIR = Path("downloads")
+BASE_DIR = Path(__file__).resolve().parent / "downloads"
 
-def get_local_pdf_paths(base_dir: Path) -> List[Path]:
-  if not base_dir.exists():
-    print(f"error: directory '{base_dir}' does not exist.")
-    return []
+def normalize_date(val: Any) -> Optional[date]:
+    if not val:
+        return None
+    if isinstance(val, date):
+        return val
+    return date.fromisoformat(str(val))
 
-  return sorted(list(base_dir.rglob("*.pdf")))
+def get_db_latest_end_date() -> Optional[date]:
+    latest_range = get_latest_date_range()
+    if latest_range and len(latest_range) == 2:
+        return normalize_date(latest_range[1])
+    return None
 
-def process_and_upload_pdf(pdf_path: Path, report_id: int) -> int:
-  try:
-    start_date, end_date = peek_date_range(str(pdf_path))
+def process_and_upload_pdf(pdf_path: Path, report_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None) -> int:
+    try:
+        if not start_date or not end_date:
+            start_date, end_date = peek_date_range(str(pdf_path))
 
-    if start_date and end_date and is_date_range_exists(start_date, end_date):
-      print(f"skipping {pdf_path.name}: date range [{start_date} to {end_date}] already exists in DB.")
-      return 0
+        if start_date and end_date and is_date_range_exists(start_date, end_date):
+            print(f"skipping {pdf_path.name}: date range [{start_date} to {end_date}] fully exists in DB.")
+            return 0
 
-    result: Dict[str, Optional[Any]] = process_pdf_file(str(pdf_path), report_id=report_id)
-    records: List[Dict[str, Any]] = result.get("records") or []
+        result: Dict[str, Optional[Any]] = process_pdf_file(str(pdf_path), report_id=report_id)
+        records: List[Dict[str, Any]] = result.get("records") or []
 
-    if not records:
-      print(f"no records extracted from {pdf_path.name}")
-      return 0
+        if not records:
+            print(f"no valid records extracted from {pdf_path.name}")
+            return 0
 
-    inserted_count = insert_records(records)
-    print(f"[{result['start_date']} to {result['end_date']}] inserted/updated {inserted_count} records for {pdf_path.name}")
-    return inserted_count
+        inserted_count = insert_records(records)
+        print(f"[{result['start_date']} to {result['end_date']}] Inserted {inserted_count} records from {pdf_path.name}")
+        return inserted_count
 
-  except Exception as e:
-    print(f"error processing PDF {pdf_path.name}: {e}")
-    return 0
+    except Exception as e:
+        print(f"error processing PDF {pdf_path.name}: {e}")
+        return 0
 
 def run_pipeline():
-  print("checking for new/missing PDFs from DOE website...")
-  newly_downloaded = scrape_and_download()
+    # 1. Fetch latest state from Database FIRST
+    db_latest_end = get_db_latest_end_date()
+    print(f"latest database record end date: {db_latest_end or 'None'}")
 
-  if newly_downloaded:
-    print(f"downloaded {len(newly_downloaded)} new PDF(s).")
-  else:
-    print("no new PDFs downloaded. checking local files...")
+    # 2. Download only new PDFs past the database cutoff date
+    print("checking for new PDFs on DOE website...")
+    newly_downloaded = scrape_and_download(since_date=db_latest_end)
 
-  pdf_paths = get_local_pdf_paths(BASE_DIR)
+    # 3. Gather local PDFs that require processing
+    pdf_paths = sorted(list(BASE_DIR.rglob("*.pdf"))) if BASE_DIR.exists() else []
+    if not pdf_paths:
+        print("no local PDF files found.")
+        return
 
-  if not pdf_paths:
-    print("everything is up to date! no new PDFs to download")
-    return
+    # Filter files: parse header dates only when necessary
+    unprocessed_pdfs: List[Tuple[Path, str, str]] = []
 
-  print(f"processing newly downloaded pdf files...")
+    for pdf_path in pdf_paths:
+        start_dt, end_dt = peek_date_range(str(pdf_path))
+        if not start_dt or not end_dt:
+            continue
 
-  total_records = 0
-  for idx, pdf_path in enumerate(pdf_paths, start=1):
-    count = process_and_upload_pdf(pdf_path, report_id=idx)
-    total_records += count
+        pdf_end = normalize_date(end_dt)
 
-  print(f"processed {len(pdf_paths)} PDFs with {total_records} total database records.")
+        # Safely ensure pdf_end is not None before comparing
+        if pdf_end and db_latest_end and pdf_end <= db_latest_end:
+            continue
+
+        unprocessed_pdfs.append((pdf_path, start_dt, end_dt))
+
+    if not unprocessed_pdfs:
+        print("database is fully up to date. no new records to insert.")
+        return
+
+    print(f"found {len(unprocessed_pdfs)} PDF file(s) newer than DB state. processing...")
+
+    total_records = 0
+    for idx, (pdf_path, start_dt, end_dt) in enumerate(unprocessed_pdfs, start=1):
+        count = process_and_upload_pdf(pdf_path, report_id=idx, start_date=start_dt, end_date=end_dt)
+        total_records += count
+
+    print(f"pipeline finished: processed {len(unprocessed_pdfs)} PDFs, inserted {total_records} total records.")
 
 if __name__ == "__main__":
-  run_pipeline()
+    run_pipeline()

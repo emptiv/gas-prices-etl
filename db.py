@@ -1,10 +1,18 @@
 import os
+from pathlib import Path
 import psycopg2
 from psycopg2.extras import execute_values
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple, Set, Optional
 from dotenv import load_dotenv
 
-load_dotenv()
+__all__ = [
+  "get_db_connection",
+  "insert_records",
+  "is_date_range_exists",
+  "get_latest_date_range",
+]
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 def get_db_connection():
   return psycopg2.connect(
@@ -27,11 +35,7 @@ def insert_records(records: List[Dict[str, Any]]) -> int:
       )
       VALUES %s
       ON CONFLICT (start_date, end_date, product)
-      DO UPDATE SET
-        report_id = EXCLUDED.report_id,
-        overall_range_min = EXCLUDED.overall_range_min,
-        overall_range_max = EXCLUDED.overall_range_max,
-        common_price = EXCLUDED.common_price;
+      DO NOTHING;
   """
 
   tuple_records = [
@@ -60,23 +64,47 @@ def insert_records(records: List[Dict[str, Any]]) -> int:
   finally:
     conn.close()
 
-def is_date_range_exists(start_date: str, end_date: str) -> bool:
+def is_date_range_exists(start_date: str, end_date: str, expected_products: int = 6) -> bool:
   if not start_date or not end_date:
     return False
 
   query = """
-    SELECT 1
+    SELECT COUNT(DISTINCT product)
     FROM ncr_gas_prices
-    WHERE start_date = %s AND end_date = %s
-    LIMIT 1;
+    WHERE start_date = %s AND end_date = %s;
   """
   conn = get_db_connection()
   try:
     with conn.cursor() as cur:
       cur.execute(query, (start_date, end_date))
-      return cur.fetchone() is not None
+      row = cur.fetchone()
+      return row is not None and row[0] >= expected_products
   except Exception as e:
-    print (f"error checking date range in DB: {e}")
+    print(f"error checking date range in DB: {e}")
     return False
+  finally:
+    conn.close()
+
+
+def get_latest_date_range() -> Optional[Tuple[str, str]]:
+  query = """
+    SELECT start_date, end_date
+    FROM ncr_gas_prices
+    GROUP BY start_date, end_date
+    ORDER BY end_date DESC, start_date DESC
+    LIMIT 1;
+  """
+
+  conn = get_db_connection()
+  try:
+    with conn.cursor() as cur:
+      cur.execute(query)
+      row = cur.fetchone()
+      if not row:
+        return None
+      return row[0], row[1]
+  except Exception as e:
+    print(f"error fetching latest date range from DB: {e}")
+    return None
   finally:
     conn.close()
