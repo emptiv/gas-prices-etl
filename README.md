@@ -4,6 +4,34 @@ an ETL (extract, transform, load) pipeline that automatically scrapes, parses, a
 
 ---
 
+### live production demo
+
+this repository powers the automated data pipeline for the **[NCR Gas Price Analytics](https://gas-price-analytics.vercel.app/)** web application. 
+
+- scrapes dynamic DOE PDF reports, normalizes multi-year pricing structures, and loads records into PostgreSQL via Supabase.
+- consumes the ingested data to serve interactive price trends, regional averages, and historical comparisons.
+
+---
+
+### screenshots
+
+#### 1. web scraping & pdf download (`scrape.py`)
+<img src="assets/scrape.png" width="600" alt="web scraping and downloading">
+
+*automated fetching and downloading of PDF reports from the DOE portal.*
+
+#### 2. pdf parsing & database ingestion (`main.py`)
+<img src="assets/parse.png" width="600" alt="pipeline execution">
+
+*parsing gas prices from PDFs and batching records into PostgreSQL.*
+
+#### 3. postgresql database table (`ncr_gas_prices`)
+<img src="assets/database.png" width="600" alt="database query result">
+
+*structured pricing data stored with unique constraints on date ranges and product types.*
+
+---
+
 ### important notes
 - the scraper (`scrape.py`) handles the updated DOE portal layout (`https://doe.gov.ph/data-and-prices/liquid-fuels/retail-pump-prices/ncr-pump-prices`). it uses Playwright and BeautifulSoup to render dynamic JavaScript tables, extract new PDF links, and download missing files automatically.
 - PDF files are fetched starting from the cutoff date (July 21, 2023 to present) and saved locally inside organized folder structures under `downloads/`.
@@ -29,7 +57,26 @@ an ETL (extract, transform, load) pipeline that automatically scrapes, parses, a
    DB_PORT=5432
    ```
 
-3. **verify local data**
+3. **database setup**
+   before running the pipeline, initialize your PostgreSQL database table using the provided `schema.sql` file:
+   ```sql
+   -- main table for the extracted data
+   CREATE TABLE IF NOT EXISTS ncr_gas_prices (
+   id SERIAL PRIMARY KEY,
+   report_id INT NOT NULL,
+   start_date DATE NOT NULL,
+   end_date DATE NOT NULL,
+   product VARCHAR(50) NOT NULL,
+   overall_range_min NUMERIC(6, 2),
+   overall_range_max NUMERIC(6, 2),
+   common_price NUMERIC(6, 2),
+   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+   -- prevent inserting identical product records for the same date window
+   CONSTRAINT unique_report_product UNIQUE (start_date, end_date, product)
+   );
+   
+4. **verify local data**
    ensure a `downloads/` directory exists (or let the script create it). downloaded files will automatically be sorted into nested structures like `downloads/YYYY/Month/`.
 
 ---

@@ -45,21 +45,17 @@ def process_and_upload_pdf(pdf_path: Path, report_id: int, start_date: Optional[
         return 0
 
 def run_pipeline():
-    # 1. Fetch latest state from Database FIRST
     db_latest_end = get_db_latest_end_date()
     print(f"latest database record end date: {db_latest_end or 'None'}")
 
-    # 2. Download only new PDFs past the database cutoff date
     print("checking for new PDFs on DOE website...")
     newly_downloaded = scrape_and_download(since_date=db_latest_end)
 
-    # 3. Gather local PDFs that require processing
     pdf_paths = sorted(list(BASE_DIR.rglob("*.pdf"))) if BASE_DIR.exists() else []
     if not pdf_paths:
         print("no local PDF files found.")
         return
 
-    # Filter files: parse header dates only when necessary
     unprocessed_pdfs: List[Tuple[Path, str, str]] = []
 
     for pdf_path in pdf_paths:
@@ -69,7 +65,6 @@ def run_pipeline():
 
         pdf_end = normalize_date(end_dt)
 
-        # Safely ensure pdf_end is not None before comparing
         if pdf_end and db_latest_end and pdf_end <= db_latest_end:
             continue
 

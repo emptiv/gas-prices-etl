@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import psycopg2
 from psycopg2.extras import execute_values
-from typing import Dict, Any, List, Tuple, Set, Optional
+from typing import Dict, Any, List, Tuple, Optional
 from dotenv import load_dotenv
 
 __all__ = [

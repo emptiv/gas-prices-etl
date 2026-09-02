@@ -1,5 +1,4 @@
 import pdfplumber
-import pandas as pd
 
 def extract_tables_from_pdf(pdf_path):
   all_tables = []
